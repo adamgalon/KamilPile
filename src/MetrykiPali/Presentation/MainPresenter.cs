@@ -51,7 +51,7 @@ public sealed class MainPresenter
         _view.NewProjectRequested += (_, _) => NewProject();
         _view.OpenProjectRequested += (_, _) => OpenProject();
         _view.SaveProjectAsRequested += (_, _) => SaveProjectAs();
-        _view.Closing += (_, _) => SaveQuietly();
+        _view.ViewClosing += (_, _) => SaveQuietly();
     }
 
     /// <summary>Where the project is currently being saved.</summary>

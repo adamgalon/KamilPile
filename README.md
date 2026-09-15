@@ -57,13 +57,21 @@ not even .NET.
 
 ### From source — for developers
 
-Requires the .NET 10 SDK.
+Requires the .NET 10 SDK. Every routine job has a named task:
 
 ```powershell
-dotnet run --project src\MetrykiPali     # start the app
-dotnet test                              # run the 159 tests
-dotnet build                             # just compile
+.\run.ps1            # list the tasks
+.\run.ps1 app        # build and start the app
+.\run.ps1 test       # run the tests   (.\run.ps1 test --filter Journal)
+.\run.ps1 watch      # start it and rebuild whenever a file changes
+.\run.ps1 exe        # build the standalone offline .exe
+.\run.ps1 check      # build + test + publish — everything required before a merge
+.\run.ps1 data       # open the folder holding the saved journal
+.\run.ps1 clean      # delete bin, obj and publish
 ```
+
+The plain `dotnet build` / `dotnet test` / `dotnet run --project src\MetrykiPali`
+work exactly as usual; `run.ps1` is only a set of shortcuts over them.
 
 ---
 

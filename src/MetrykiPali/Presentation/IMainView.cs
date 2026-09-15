@@ -65,5 +65,5 @@ public interface IMainView
     event EventHandler NewProjectRequested;
     event EventHandler OpenProjectRequested;
     event EventHandler SaveProjectAsRequested;
-    event EventHandler Closing;
+    event EventHandler ViewClosing;
 }
