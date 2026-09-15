@@ -357,7 +357,19 @@ current site had just been saved to.
 
 ---
 
-## 9. Known limits
+## 9. Working on the code
+
+Each feature gets its own branch, merged back with `--no-ff` so the history shows
+what changed for which reason. Branch names, commit style and the checks to run
+before merging are in **[CONTRIBUTING.md](CONTRIBUTING.md)**.
+
+```bash
+git log --graph --oneline --decorate --all     # what has changed, feature by feature
+```
+
+---
+
+## 10. Known limits
 
 - Output is `.xlsx`. PDF is one *Save as PDF* away in Excel, but the app does not
   write PDF directly.
