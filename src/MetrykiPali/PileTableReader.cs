@@ -72,7 +72,7 @@ public static class PileTableReader
         var result = new List<PileRange>();
         foreach (var line in File.ReadAllLines(path, Encoding.UTF8))
         {
-            var parts = line.Split(new[] { ';', ',', '\t' }, StringSplitOptions.None);
+            var parts = line.Split(FieldSeparator(line), StringSplitOptions.None);
             if (parts.Length < 4) continue;
             var range = TryBuildRange(
                 parts[0], parts[1], parts[2], parts[3],
@@ -80,6 +80,19 @@ public static class PileTableReader
             if (range is not null) result.Add(range);
         }
         return result;
+    }
+
+    /// <summary>
+    /// Picks the separator for one line. A semicolon or a tab wins over a comma,
+    /// because Excel exports on a Polish machine separate fields with semicolons
+    /// and write decimals with commas - splitting such a line on commas as well
+    /// would tear "0,4" into two fields and lose the row.
+    /// </summary>
+    private static char[] FieldSeparator(string line)
+    {
+        if (line.Contains(';')) return new[] { ';' };
+        if (line.Contains('\t')) return new[] { '\t' };
+        return new[] { ',' };
     }
 
     // ------------------------------------------------------------------ PDF

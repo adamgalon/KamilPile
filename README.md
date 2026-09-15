@@ -141,6 +141,36 @@ Logging three days (12 / 18 / 12 piles) produces **four** pages — `12.09`,
 as piles `11-16, 63-66, 77, 78`, which is page 5 of the reference
 `Metryki pali1.pdf` exactly.
 
+## Tests
+
+```powershell
+dotnet test
+```
+
+96 tests covering the logic behind the UI:
+
+| Area | What is checked |
+|---|---|
+| `PileNumbersTests` | `1-10, 25, 30-33` parsing, mixed separators, en/em dashes, de-duplication, round-tripping; reversed ranges and junk rejected with the bad fragment named |
+| `PileMathTests` | the volume formula, every length in the reference table (6 m → 0.98 … 12 m → 1.96), half-away-from-zero rounding |
+| `PileTableReaderTests` | `.csv` / `.xlsx` / `.pdf` inputs, comma *and* dot decimals, headers and notes skipped, a file locked by Excel, unsupported types and empty files |
+| `PaginationTests` | days never share a page, an 18-pile day splits 12 + 6, date ordering, configurable page size |
+| `MetrykaWriterTests` | the generated workbook read back: label rows, the 48-row block, dates per page, page breaks, A4 fit-to-width, header/footer, borders, an 80-page run |
+| `ProjectStoreTests` | journal round-trip, pour dates and corrected lengths preserved, Polish characters, missing/corrupt files, no leftover temp file, daily backup |
+| `WorkflowTests` | three site days across two restarts, then one generation; reloading a corrected schedule keeps the journal; moving a pile between days |
+
+Test inputs live in [tests/MetrykiPali.Tests/fixtures/](tests/MetrykiPali.Tests/fixtures/) and double as
+sample files you can load into the app by hand:
+
+| File | Shape |
+|---|---|
+| `tabelka-testowa.xlsx` | 6 ranges / 60 piles, the normal case |
+| `tabelka-testowa.pdf` | the same table as a PDF |
+| `tabelka-podstawowa.csv` | semicolons, dot decimals, a 7.5 m length |
+| `tabelka-przecinki.csv` | semicolons with **comma** decimals, mixed diameters |
+| `tabelka-angielska.csv` | commas as field separators |
+| `tabelka-smieci.csv` | title lines, a blank row, a hand-written note and a totals row to ignore |
+
 ## Project layout
 
 ```
@@ -151,6 +181,8 @@ src/MetrykiPali/
   ProjectStore.cs      saves/restores the journal between runs
   MetrykaWriter.cs     writes the paginated METRYKA PALI workbook
   MainForm.cs          the UI
+tests/MetrykiPali.Tests/
+  fixtures/            sample schedules in every supported format
 publish.ps1            builds the standalone offline .exe
 ```
 
