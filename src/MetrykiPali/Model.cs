@@ -25,6 +25,19 @@ public sealed class Pile
     public double Concrete { get; set; }
     public string ConcretePlant { get; set; } = "";
     public string Reinforcement { get; set; } = "";
+
+    /// <summary>
+    /// The day this pile was poured, or null while it is still outstanding.
+    /// Set from the work journal; drives the DATA field of the metryka page.
+    /// </summary>
+    public DateTime? Executed { get; set; }
+}
+
+/// <summary>A day of work: every pile poured on one date.</summary>
+public sealed class WorkDay
+{
+    public DateTime Date { get; set; }
+    public List<Pile> Piles { get; set; } = new();
 }
 
 /// <summary>Everything the generator needs besides the pile list itself.</summary>
@@ -36,6 +49,8 @@ public sealed class MetrykaSettings
     public string Betoniarnia { get; set; } = "Bosta";
     public string Firma { get; set; } = "GREIFBAU SP. Z O.O.";
     public string DokumentacjaNaglowek { get; set; } = "DOKUMENTACJA POWYKONAWCZA";
+
+    /// <summary>Date proposed in the journal entry box; not written to the metryki.</summary>
     public DateTime Data { get; set; } = DateTime.Today;
 
     /// <summary>
@@ -46,6 +61,23 @@ public sealed class MetrykaSettings
     public double ConcreteFactor { get; set; } = 1.30;
 
     public int PilesPerPage { get; set; } = 12;
+}
+
+/// <summary>
+/// The whole working state of the application, saved between runs so that piles
+/// can be logged day by day and the metryki generated once at the end.
+/// </summary>
+public sealed class ProjectState
+{
+    public int Version { get; set; } = 1;
+    public string? SourcePath { get; set; }
+    public MetrykaSettings Settings { get; set; } = new();
+    public List<PileRange> Ranges { get; set; } = new();
+    /// <summary>
+    /// The full pile list, including any lengths corrected by hand and the pour
+    /// date recorded in the journal (<see cref="Pile.Executed"/>).
+    /// </summary>
+    public List<Pile> Piles { get; set; } = new();
 }
 
 public static class PileMath

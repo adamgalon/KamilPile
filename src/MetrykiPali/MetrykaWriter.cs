@@ -27,28 +27,46 @@ public static class MetrykaWriter
     private const int BandHeight = 3;
     private const int BandCount = 7;
 
-    public static void Write(string path, IReadOnlyList<Pile> piles, MetrykaSettings settings)
+    /// <summary>
+    /// Writes one workbook covering every day in the journal. Days are ordered by
+    /// date and never share a page, so each metryka carries a single DATA value -
+    /// the day those piles were actually poured.
+    /// </summary>
+    public static void Write(string path, IReadOnlyList<WorkDay> days, MetrykaSettings settings)
     {
-        var perPage = Math.Max(1, settings.PilesPerPage);
-        var pageCount = (int)Math.Ceiling(piles.Count / (double)perPage);
+        var pages = Paginate(days, settings.PilesPerPage);
+        if (pages.Count == 0)
+            throw new InvalidOperationException("Dziennik jest pusty — brak pali do wygenerowania.");
 
         using var wb = new XLWorkbook();
         var ws = wb.AddWorksheet("Metryki");
 
         ConfigureSheet(ws, settings);
 
-        for (var page = 0; page < pageCount; page++)
+        for (var page = 0; page < pages.Count; page++)
         {
             var baseRow = page * RowsPerBlock;
-            var pagePiles = piles.Skip(page * perPage).Take(perPage).ToList();
-            WriteBlock(ws, baseRow, pagePiles, settings);
+            WriteBlock(ws, baseRow, pages[page].Piles, pages[page].Date, settings);
 
-            if (page < pageCount - 1)
+            if (page < pages.Count - 1)
                 ws.PageSetup.AddHorizontalPageBreak(baseRow + RowsPerBlock);
         }
 
-        ws.PageSetup.PrintAreas.Add(1, 1, pageCount * RowsPerBlock, LastDataColumn);
+        ws.PageSetup.PrintAreas.Add(1, 1, pages.Count * RowsPerBlock, LastDataColumn);
         wb.SaveAs(path);
+    }
+
+    /// <summary>Splits each day into pages of at most <paramref name="perPage"/> piles.</summary>
+    public static List<(DateTime Date, List<Pile> Piles)> Paginate(IReadOnlyList<WorkDay> days, int perPage)
+    {
+        perPage = Math.Max(1, perPage);
+        var pages = new List<(DateTime, List<Pile>)>();
+
+        foreach (var day in days.Where(d => d.Piles.Count > 0).OrderBy(d => d.Date))
+            foreach (var chunk in day.Piles.OrderBy(p => p.Number).Chunk(perPage))
+                pages.Add((day.Date, chunk.ToList()));
+
+        return pages;
     }
 
     // --------------------------------------------------------------- layout
@@ -81,7 +99,7 @@ public static class MetrykaWriter
         ps.Footer.Right.AddText(XLHFPredefinedText.PageNumber);
     }
 
-    private static void WriteBlock(IXLWorksheet ws, int baseRow, IReadOnlyList<Pile> piles, MetrykaSettings s)
+    private static void WriteBlock(IXLWorksheet ws, int baseRow, IReadOnlyList<Pile> piles, DateTime date, MetrykaSettings s)
     {
         for (var r = baseRow + 1; r <= baseRow + RowsPerBlock; r++)
             ws.Row(r).Height = 15.75;
@@ -106,7 +124,7 @@ public static class MetrykaWriter
         dataLabel.Style.Alignment.Vertical = XLAlignmentVerticalValues.Top;
 
         var dataValue = ws.Range(baseRow + OffData, 3, baseRow + OffData, 5).Merge();
-        dataValue.FirstCell().Value = s.Data;
+        dataValue.FirstCell().Value = date;
         dataValue.FirstCell().Style.DateFormat.Format = "dd/MM/yyyy";
         dataValue.Style.Font.SetFontName("Calibri").Font.SetFontSize(12);
         dataValue.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;

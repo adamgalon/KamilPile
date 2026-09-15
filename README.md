@@ -35,16 +35,63 @@ dotnet run --project src\MetrykiPali
    Header rows and blank lines are skipped automatically. Both `0.4` and `0,4`
    decimal separators are accepted.
 
-2. **Check the header fields** — budowa, wykonawca, metoda, data, betoniarnia.
+2. **Check the header fields** — budowa, wykonawca, metoda, betoniarnia.
    They are pre-filled with the values from the reference documentation and are
    written onto every page.
 
-3. **Review the piles** in the grid. Ranges are expanded into individual piles;
-   `Dł. wykonana` defaults to the design length and the cells are editable, so
-   you can correct any pile that was driven differently before generating.
+3. **Log each day's work.** Pick the date, type the piles you completed and press
+   **Dodaj do dziennika** (or just Enter):
 
-4. **Generuj metryki (.xlsx)** — choose where to save. Then **Otwórz
-   wygenerowany plik** to check it, and print or *Save as PDF* from Excel.
+   ```
+   Data wykonania: 13.09.2022    Pale: 11-16, 63-66, 77-84
+   ```
+
+   Ranges and single numbers, separated by commas, semicolons or spaces. You can
+   also select rows on the **Pale** tab and use **Dodaj zaznaczone z listy pali**.
+
+   Close the app and come back tomorrow — the journal is still there. Add the
+   next day, and the next, for as long as the job runs.
+
+4. **Review the piles** on the **Pale** tab. `Dł. wykonana` defaults to the
+   design length and is editable, so you can correct any pile that was driven
+   differently; its concrete volume recalculates immediately.
+
+5. **Generuj metryki (.xlsx)** — generates every day in the journal in one go.
+   Then **Otwórz wygenerowany plik** to check it, and print or *Save as PDF*
+   from Excel.
+
+## The work journal
+
+Each pile carries the date it was poured. The **Dziennik (dni)** tab shows one
+row per day — date, the piles in compact form, count, concrete and how many
+metryka pages that day will produce.
+
+- **Days never share a page.** Each metryka carries one DATA value, the day those
+  piles were actually poured, exactly as in the reference documentation. A day of
+  18 piles produces two pages (12 + 6), not one and a half.
+- **Re-entering a pile with a different date moves it**, after asking. Useful when
+  a number was logged against the wrong day.
+- **Usuń zaznaczony dzień** returns that day's piles to the unassigned pool.
+- Piles with no date are **not** written to the metryki. The status bar always
+  shows how many are still outstanding, and you are warned before generating.
+- Reloading a corrected schedule **keeps the journal** — pour dates are matched
+  back by pile number, so weeks of site records are not lost.
+
+## Where the data is kept
+
+The journal is saved automatically — on every change and on exit — to:
+
+```
+%APPDATA%\MetrykiPali\projekt.mpali
+```
+
+and reopened the next time you start the app. It is plain JSON, and a dated
+backup is kept the first time you open the app each day. Saves are written to a
+temporary file and then moved into place, so an interrupted save cannot destroy
+the journal.
+
+For more than one site, use **Projekt → Zapisz jako...** / **Otwórz...** to keep
+separate `.mpali` files. **Projekt → Pokaż folder z danymi** opens the folder.
 
 ## Concrete volume
 
@@ -69,7 +116,8 @@ to match a particular pour — every volume in the grid recalculates immediately
 
 ## Output layout
 
-Matches the reference documentation: **12 piles per A4 portrait page**, laid out
+Matches the reference documentation: **12 piles per A4 portrait page**, grouped by
+pour day and ordered by date, laid out
 on a repeating 48-row block so page breaks fall exactly where they do in the
 original, with the same page header (`BUDOWA … / DOKUMENTACJA POWYKONAWCZA`),
 footer (`GREIFBAU SP. Z O.O.` + page number), margins and seven table rows:
@@ -85,15 +133,22 @@ plus `UWAGI:` and `KIEROWNIK ROBÓT PALOWYCH:` blocks.
 ## Verified against the real data
 
 `tabelka z palami.xlsx` and `tabelka z palami1.pdf` both parse to **93 ranges →
-969 piles → 81 pages**. Exported through Excel the result is an 81-page PDF with
-12 piles on each full page and 9 on the last.
+969 piles**. Exported through Excel the whole schedule on one date gives an
+81-page PDF with 12 piles per full page and 9 on the last.
+
+Logging three days (12 / 18 / 12 piles) produces **four** pages — `12.09`,
+`13.09` ×2, `14.09` — with no page mixing two dates. The `13.09` page comes out
+as piles `11-16, 63-66, 77, 78`, which is page 5 of the reference
+`Metryki pali1.pdf` exactly.
 
 ## Project layout
 
 ```
 src/MetrykiPali/
-  Model.cs             PileRange, Pile, MetrykaSettings, volume formula
+  Model.cs             PileRange, Pile, WorkDay, ProjectState, volume formula
   PileTableReader.cs   reads .xlsx/.xls/.csv/.pdf, expands ranges into piles
+  PileNumbers.cs       parses and formats "1-10, 25, 30-33"
+  ProjectStore.cs      saves/restores the journal between runs
   MetrykaWriter.cs     writes the paginated METRYKA PALI workbook
   MainForm.cs          the UI
 publish.ps1            builds the standalone offline .exe
@@ -103,9 +158,7 @@ publish.ps1            builds the standalone offline .exe
 
 - Output is `.xlsx`; PDF is one *Save as PDF* away in Excel but is not generated
   directly by the app.
-- Every page carries the same date. The reference documentation groups piles by
-  the day they were poured; that grouping is not reconstructed from the schedule.
-- Piles are emitted in schedule order, not in the order they were actually
-  executed.
 - The source table must have its five columns in the order shown above; the app
   does not yet let you map columns by name.
+- `Beton z betoniarni` is one value for the whole job, not per day.
+- The journal records which piles were poured on a day, not the order within it.
