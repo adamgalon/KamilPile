@@ -118,17 +118,22 @@ to work out why something is the way it is.
 ## Before a merge into `main`
 
 ```powershell
-dotnet build                     # must be 0 warnings, 0 errors
-dotnet test                      # must be all green
-powershell -ExecutionPolicy Bypass -File publish.ps1   # if the app changed
+.\run.ps1 check
 ```
 
-If you touched anything the user sees, start the built `.exe` and use it once.
-The test suite drives the presenter, not the window — a broken layout or an
-unwired button will pass every test and still be broken.
+That builds **both Debug and Release** with warnings treated as errors, runs the
+tests, and produces the `.exe`. It stops at the first failure, so it cannot
+report success over a broken step. Release is built too because some warnings
+only appear there — and Release is what the `.exe` people are given comes from.
 
-If you touched **`JsonProjectRepository`, `ProjectState`, or anything under
-`Model/`**, open an existing `projekt.mpali` with the new build before merging.
-That file holds weeks of site records that cannot be reconstructed from the
-inputs; a format change that silently fails to load is the worst thing this
-project can do.
+Two things it cannot check for you:
+
+- **If you touched anything the user sees**, start the built `.exe` and use it
+  once. The test suite drives the presenter, not the window — a broken layout or
+  an unwired button passes every test and is still broken.
+
+- **If you touched `JsonProjectRepository`, `ProjectState`, or anything under
+  `Model/`**, open an existing `projekt.mpali` with the new build first
+  (`.\run.ps1 data` shows you where it is). That file holds weeks of site
+  records that cannot be reconstructed from the inputs; a format change that
+  silently fails to load is the worst thing this project can do.

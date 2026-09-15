@@ -88,7 +88,7 @@ internal sealed class FakeMainView : IMainView
     public event EventHandler? NewProjectRequested;
     public event EventHandler? OpenProjectRequested;
     public event EventHandler? SaveProjectAsRequested;
-    public event EventHandler? Closing;
+    public event EventHandler? ViewClosing;
 
     public void ClickLoadSchedule() => LoadScheduleRequested?.Invoke(this, EventArgs.Empty);
     public void ClickAddDay() => AddDayRequested?.Invoke(this, EventArgs.Empty);
@@ -106,6 +106,11 @@ internal sealed class FakeMainView : IMainView
         PilesPerPage = value;
         PilesPerPageChanged?.Invoke(this, EventArgs.Empty);
     }
+    public void ChangeSiteDetails(string budowa)
+    {
+        Budowa = budowa;
+        SettingsChanged?.Invoke(this, EventArgs.Empty);
+    }
     public void ChangeConcretePlant(string value)
     {
         Betoniarnia = value;
@@ -115,7 +120,7 @@ internal sealed class FakeMainView : IMainView
     public void ClickNewProject() => NewProjectRequested?.Invoke(this, EventArgs.Empty);
     public void ClickOpenProject() => OpenProjectRequested?.Invoke(this, EventArgs.Empty);
     public void ClickSaveProjectAs() => SaveProjectAsRequested?.Invoke(this, EventArgs.Empty);
-    public void CloseWindow() => Closing?.Invoke(this, EventArgs.Empty);
+    public void CloseWindow() => ViewClosing?.Invoke(this, EventArgs.Empty);
 
     /// <summary>Types pile numbers into the journal box and presses the button.</summary>
     public void LogDay(DateTime date, string piles)
@@ -167,6 +172,7 @@ internal sealed class RecordingMetrykaWriter : IMetrykaWriter
 {
     public string? Path { get; private set; }
     public IReadOnlyList<WorkDay> Days { get; private set; } = Array.Empty<WorkDay>();
+    public MetrykaSettings? Settings { get; private set; }
     public int Calls { get; private set; }
 
     /// <summary>Set to make the write fail, as a locked output file would.</summary>
@@ -178,6 +184,7 @@ internal sealed class RecordingMetrykaWriter : IMetrykaWriter
 
         Path = path;
         Days = days;
+        Settings = settings;
         Calls++;
     }
 }

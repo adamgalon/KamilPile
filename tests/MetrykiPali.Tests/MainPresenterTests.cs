@@ -497,6 +497,31 @@ public class MainPresenterTests
     // --------------------------------------------------------------- saving
 
     [Fact]
+    public void Editing_the_site_details_reaches_the_generated_metryki()
+    {
+        LoadSchedule();
+        _view.LogDay(D12, "1-12");
+        _view.ChangeSiteDetails("Budynek przy ul. Piotrkowskiej.");
+        _view.MetrykiPath = @"C:\wyjscie\metryki.xlsx";
+
+        _view.ClickGenerate();
+
+        Assert.Equal("Budynek przy ul. Piotrkowskiej.", _writer.Settings!.Budowa);
+    }
+
+    [Fact]
+    public void Editing_the_site_details_is_remembered_next_time()
+    {
+        LoadSchedule();
+        _view.ChangeSiteDetails("Budynek przy ul. Piotrkowskiej.");
+
+        var next = new FakeMainView();
+        new MainPresenter(next, _reader, _writer, _repository).Start();
+
+        Assert.Equal("Budynek przy ul. Piotrkowskiej.", next.Budowa);
+    }
+
+    [Fact]
     public void Every_change_is_saved()
     {
         LoadSchedule();

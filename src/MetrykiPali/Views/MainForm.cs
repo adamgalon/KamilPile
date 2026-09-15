@@ -121,7 +121,7 @@ public sealed class MainForm : Form, IMainView
     public event EventHandler? NewProjectRequested;
     public event EventHandler? OpenProjectRequested;
     public event EventHandler? SaveProjectAsRequested;
-    public event EventHandler? Closing;
+    public event EventHandler? ViewClosing;
 
     private void WireEvents()
     {
@@ -152,7 +152,7 @@ public sealed class MainForm : Form, IMainView
             AddDayRequested?.Invoke(this, EventArgs.Empty);
         };
 
-        FormClosing += (_, _) => Closing?.Invoke(this, EventArgs.Empty);
+        FormClosing += (_, _) => ViewClosing?.Invoke(this, EventArgs.Empty);
     }
 
     // ----------------------------------------------------- IMainView display
