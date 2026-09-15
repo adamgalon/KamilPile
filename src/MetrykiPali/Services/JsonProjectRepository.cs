@@ -1,13 +1,15 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace MetrykiPali;
+using MetrykiPali.Model;
+
+namespace MetrykiPali.Services;
 
 /// <summary>
 /// Saves and restores the working state, so piles can be logged over several
 /// days and across restarts before the metryki are generated in one go.
 /// </summary>
-public static class ProjectStore
+public sealed class JsonProjectRepository : IProjectRepository
 {
     public const string FileExtension = ".mpali";
 
@@ -19,12 +21,12 @@ public static class ProjectStore
     };
 
     /// <summary>The project reopened automatically on every start.</summary>
-    public static string DefaultPath { get; } = Path.Combine(
+    public string DefaultPath { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "MetrykiPali",
         "projekt" + FileExtension);
 
-    public static void Save(string path, ProjectState state)
+    public void Save(string path, ProjectState state)
     {
         var directory = Path.GetDirectoryName(path);
         if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
@@ -36,7 +38,7 @@ public static class ProjectStore
         File.Move(temp, path, overwrite: true);
     }
 
-    public static ProjectState? Load(string path)
+    public ProjectState? Load(string path)
     {
         if (!File.Exists(path)) return null;
 
@@ -51,7 +53,7 @@ public static class ProjectStore
     }
 
     /// <summary>Keeps one dated backup per day, so a bad edit is recoverable.</summary>
-    public static void BackupOnce(string path)
+    public void BackupOnce(string path)
     {
         if (!File.Exists(path)) return;
 

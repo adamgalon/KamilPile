@@ -1,0 +1,58 @@
+namespace MetrykiPali.Model;
+
+public static class PileMath
+{
+    /// <summary>Theoretical shaft volume of a pile, m3.</summary>
+    public static double TheoreticalVolume(double diameter, double length)
+        => Math.PI * diameter * diameter / 4.0 * length;
+
+    /// <summary>Concrete placed, m3, rounded the way the metryka reports it.</summary>
+    public static double Concrete(double diameter, double length, double factor)
+        => Math.Round(TheoreticalVolume(diameter, length) * factor, 2, MidpointRounding.AwayFromZero);
+}
+
+/// <summary>Turns the ranges from the source table into individual piles.</summary>
+public static class PileSchedule
+{
+    public static List<Pile> Expand(IEnumerable<PileRange> ranges, MetrykaSettings settings)
+    {
+        var piles = new List<Pile>();
+        foreach (var r in ranges)
+        {
+            for (var no = r.From; no <= r.To; no++)
+            {
+                piles.Add(new Pile
+                {
+                    Number = no,
+                    Diameter = r.Diameter,
+                    DesignLength = r.Length,
+                    ActualLength = r.Length,
+                    Concrete = PileMath.Concrete(r.Diameter, r.Length, settings.ConcreteFactor),
+                    ConcretePlant = settings.Betoniarnia,
+                    Reinforcement = r.Reinforcement
+                });
+            }
+        }
+        return piles;
+    }
+
+    /// <summary>
+    /// Carries pour dates from a previous pile list onto a freshly loaded one,
+    /// matching by pile number. Reloading a corrected schedule must not discard
+    /// the journal - it can represent weeks of site records.
+    /// </summary>
+    public static int CarryOverDates(IEnumerable<Pile> previous, IEnumerable<Pile> fresh)
+    {
+        var byNumber = previous.ToDictionary(p => p.Number);
+        var kept = 0;
+
+        foreach (var pile in fresh)
+        {
+            if (!byNumber.TryGetValue(pile.Number, out var old) || old.Executed is null) continue;
+            pile.Executed = old.Executed;
+            kept++;
+        }
+
+        return kept;
+    }
+}

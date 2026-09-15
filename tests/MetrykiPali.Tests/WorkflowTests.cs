@@ -42,34 +42,34 @@ public sealed class WorkflowTests : IDisposable
         var settings = new MetrykaSettings { ConcreteFactor = 1.30 };
 
         // --- day one: load the schedule and log the first piles --------------
-        var ranges = PileTableReader.Read(Fixture("tabelka-testowa.xlsx")).ToList();
+        var ranges = Reader.Read(Fixture("tabelka-testowa.xlsx")).ToList();
         var project = new ProjectState
         {
             SourcePath = Fixture("tabelka-testowa.xlsx"),
             Settings = settings,
             Ranges = ranges,
-            Piles = PileTableReader.Expand(ranges, settings)
+            Piles = PileSchedule.Expand(ranges, settings)
         };
         Log(project, "1-12", new DateTime(2022, 9, 12));
-        ProjectStore.Save(projectPath, project);
+        Repository.Save(projectPath, project);
 
         // --- restart: the app reopens the saved project ----------------------
-        project = ProjectStore.Load(projectPath)!;
+        project = Repository.Load(projectPath)!;
         Assert.Equal(60, project.Piles.Count);
         Assert.Equal(12, project.Piles.Count(p => p.Executed is not null));
 
         Log(project, "13-24, 25-30", new DateTime(2022, 9, 13));
-        ProjectStore.Save(projectPath, project);
+        Repository.Save(projectPath, project);
 
         // --- restart again ---------------------------------------------------
-        project = ProjectStore.Load(projectPath)!;
+        project = Repository.Load(projectPath)!;
         Assert.Equal(30, project.Piles.Count(p => p.Executed is not null));
 
         Log(project, "31-42", new DateTime(2022, 9, 14));
-        ProjectStore.Save(projectPath, project);
+        Repository.Save(projectPath, project);
 
         // --- the end of the job: generate everything at once -----------------
-        project = ProjectStore.Load(projectPath)!;
+        project = Repository.Load(projectPath)!;
         var days = Journal(project);
 
         Assert.Equal(3, days.Count);
@@ -77,7 +77,7 @@ public sealed class WorkflowTests : IDisposable
         Assert.Equal(18, project.Piles.Count(p => p.Executed is null));   // 43-60 still to do
 
         var output = Path.Combine(_dir, "metryki.xlsx");
-        MetrykaWriter.Write(output, days, project.Settings);
+        Writer.Write(output, days, project.Settings);
 
         using var wb = new XLWorkbook(output);
         var ws = wb.Worksheet(1);
@@ -94,14 +94,14 @@ public sealed class WorkflowTests : IDisposable
     public void Reloading_a_corrected_schedule_keeps_the_journal()
     {
         var settings = new MetrykaSettings();
-        var ranges = PileTableReader.Read(Fixture("tabelka-testowa.xlsx")).ToList();
-        var before = new ProjectState { Piles = PileTableReader.Expand(ranges, settings) };
+        var ranges = Reader.Read(Fixture("tabelka-testowa.xlsx")).ToList();
+        var before = new ProjectState { Piles = PileSchedule.Expand(ranges, settings) };
 
         Log(before, "1-12", new DateTime(2022, 9, 12));
         var original = before.Piles;
 
         // The designer reissues the schedule; the piles are rebuilt from it.
-        var reloaded = PileTableReader.Expand(ranges, settings);
+        var reloaded = PileSchedule.Expand(ranges, settings);
         var previous = original.ToDictionary(p => p.Number);
         foreach (var pile in reloaded)
             if (previous.TryGetValue(pile.Number, out var old) && old.Executed is not null)
@@ -117,7 +117,7 @@ public sealed class WorkflowTests : IDisposable
         var settings = new MetrykaSettings();
         var project = new ProjectState
         {
-            Piles = PileTableReader.Expand(PileTableReader.Read(Fixture("tabelka-testowa.xlsx")), settings)
+            Piles = PileSchedule.Expand(Reader.Read(Fixture("tabelka-testowa.xlsx")), settings)
         };
 
         Log(project, "1-5", new DateTime(2022, 9, 12));
@@ -137,7 +137,7 @@ public sealed class WorkflowTests : IDisposable
         var settings = new MetrykaSettings { ConcreteFactor = 1.30 };
         var project = new ProjectState
         {
-            Piles = PileTableReader.Expand(PileTableReader.Read(Fixture("tabelka-testowa.xlsx")), settings)
+            Piles = PileSchedule.Expand(Reader.Read(Fixture("tabelka-testowa.xlsx")), settings)
         };
 
         Log(project, "1-12", new DateTime(2022, 9, 12));    // all 7 m piles -> 1.14 each

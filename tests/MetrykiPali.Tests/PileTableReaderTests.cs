@@ -10,7 +10,7 @@ public class PileTableReaderTests
     [Fact]
     public void Reads_a_plain_csv_schedule()
     {
-        var ranges = PileTableReader.Read(Fixture("tabelka-podstawowa.csv"));
+        var ranges = Reader.Read(Fixture("tabelka-podstawowa.csv"));
 
         Assert.Equal(5, ranges.Count);
         Assert.Equal(1, ranges[0].From);
@@ -25,7 +25,7 @@ public class PileTableReaderTests
     [Fact]
     public void Accepts_comma_decimal_separators()
     {
-        var ranges = PileTableReader.Read(Fixture("tabelka-przecinki.csv"));
+        var ranges = Reader.Read(Fixture("tabelka-przecinki.csv"));
 
         Assert.Equal(3, ranges.Count);
         Assert.Equal(0.4, ranges[0].Diameter);
@@ -40,7 +40,7 @@ public class PileTableReaderTests
     {
         // The other common export shape. Guards the semicolon handling from
         // breaking plain comma-separated files.
-        var ranges = PileTableReader.Read(Fixture("tabelka-angielska.csv"));
+        var ranges = Reader.Read(Fixture("tabelka-angielska.csv"));
 
         Assert.Equal(3, ranges.Count);
         Assert.Equal(0.4, ranges[0].Diameter);
@@ -52,7 +52,7 @@ public class PileTableReaderTests
     [Fact]
     public void Skips_headers_blank_lines_notes_and_totals()
     {
-        var ranges = PileTableReader.Read(Fixture("tabelka-smieci.csv"));
+        var ranges = Reader.Read(Fixture("tabelka-smieci.csv"));
 
         Assert.Equal(3, ranges.Count);
         Assert.Equal(new[] { 1, 11, 31 }, ranges.Select(r => r.From));
@@ -64,7 +64,7 @@ public class PileTableReaderTests
     [Fact]
     public void Reads_an_xlsx_schedule()
     {
-        var ranges = PileTableReader.Read(Fixture("tabelka-testowa.xlsx"));
+        var ranges = Reader.Read(Fixture("tabelka-testowa.xlsx"));
 
         Assert.Equal(6, ranges.Count);
         Assert.Equal(60, ranges.Sum(r => r.Count));
@@ -75,8 +75,8 @@ public class PileTableReaderTests
     [Fact]
     public void Reads_a_pdf_schedule_identically_to_the_xlsx()
     {
-        var fromExcel = PileTableReader.Read(Fixture("tabelka-testowa.xlsx"));
-        var fromPdf = PileTableReader.Read(Fixture("tabelka-testowa.pdf"));
+        var fromExcel = Reader.Read(Fixture("tabelka-testowa.xlsx"));
+        var fromPdf = Reader.Read(Fixture("tabelka-testowa.pdf"));
 
         Assert.Equal(
             fromExcel.Select(r => (r.From, r.To, r.Diameter, r.Length)),
@@ -91,7 +91,7 @@ public class PileTableReaderTests
         var path = Fixture("tabelka-testowa.xlsx");
         using var hold = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
 
-        Assert.Equal(6, PileTableReader.Read(path).Count);
+        Assert.Equal(6, Reader.Read(path).Count);
     }
 
     // --------------------------------------------------------------- errors
@@ -103,7 +103,7 @@ public class PileTableReaderTests
         File.WriteAllText(path, "nie tabelka");
         try
         {
-            Assert.Throws<NotSupportedException>(() => PileTableReader.Read(path));
+            Assert.Throws<NotSupportedException>(() => Reader.Read(path));
         }
         finally { File.Delete(path); }
     }
@@ -115,7 +115,7 @@ public class PileTableReaderTests
         File.WriteAllText(path, "jakis tekst\nbez danych\n");
         try
         {
-            var error = Assert.Throws<InvalidDataException>(() => PileTableReader.Read(path));
+            var error = Assert.Throws<InvalidDataException>(() => Reader.Read(path));
             Assert.Contains("rednica", error.Message);   // names the expected columns
         }
         finally { File.Delete(path); }
@@ -127,7 +127,7 @@ public class PileTableReaderTests
     public void Expand_turns_ranges_into_individual_piles()
     {
         var settings = new MetrykaSettings { ConcreteFactor = 1.30, Betoniarnia = "Bosta" };
-        var piles = PileTableReader.Expand(PileTableReader.Read(Fixture("tabelka-testowa.xlsx")), settings);
+        var piles = PileSchedule.Expand(Reader.Read(Fixture("tabelka-testowa.xlsx")), settings);
 
         Assert.Equal(60, piles.Count);
         Assert.Equal(Enumerable.Range(1, 60), piles.Select(p => p.Number));
@@ -144,10 +144,10 @@ public class PileTableReaderTests
     [Fact]
     public void Expand_uses_the_configured_coefficient()
     {
-        var ranges = PileTableReader.Read(Fixture("tabelka-podstawowa.csv"));
+        var ranges = Reader.Read(Fixture("tabelka-podstawowa.csv"));
 
-        var standard = PileTableReader.Expand(ranges, new MetrykaSettings { ConcreteFactor = 1.30 });
-        var lean = PileTableReader.Expand(ranges, new MetrykaSettings { ConcreteFactor = 1.05 });
+        var standard = PileSchedule.Expand(ranges, new MetrykaSettings { ConcreteFactor = 1.30 });
+        var lean = PileSchedule.Expand(ranges, new MetrykaSettings { ConcreteFactor = 1.05 });
 
         Assert.Equal(1.14, standard[0].Concrete);
         Assert.Equal(0.92, lean[0].Concrete);
@@ -156,8 +156,8 @@ public class PileTableReaderTests
     [Fact]
     public void Expand_covers_every_number_in_every_range()
     {
-        var ranges = PileTableReader.Read(Fixture("tabelka-smieci.csv"));
-        var piles = PileTableReader.Expand(ranges, new MetrykaSettings());
+        var ranges = Reader.Read(Fixture("tabelka-smieci.csv"));
+        var piles = PileSchedule.Expand(ranges, new MetrykaSettings());
 
         Assert.Equal(25, piles.Count);                       // 10 + 10 + 5
         Assert.DoesNotContain(piles, p => p.Number is >= 21 and <= 30);   // the withheld block

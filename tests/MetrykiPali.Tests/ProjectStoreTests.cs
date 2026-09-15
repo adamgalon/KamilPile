@@ -42,9 +42,9 @@ public sealed class ProjectStoreTests : IDisposable
     public void Saves_and_restores_the_whole_project()
     {
         var path = Path_("projekt.mpali");
-        ProjectStore.Save(path, SampleProject());
+        Repository.Save(path, SampleProject());
 
-        var loaded = ProjectStore.Load(path);
+        var loaded = Repository.Load(path);
 
         Assert.NotNull(loaded);
         Assert.Equal(@"C:\budowa\tabelka z palami.xlsx", loaded!.SourcePath);
@@ -57,9 +57,9 @@ public sealed class ProjectStoreTests : IDisposable
     public void Keeps_the_pour_dates()
     {
         var path = Path_("projekt.mpali");
-        ProjectStore.Save(path, SampleProject());
+        Repository.Save(path, SampleProject());
 
-        var loaded = ProjectStore.Load(path)!;
+        var loaded = Repository.Load(path)!;
 
         Assert.Equal(new DateTime(2022, 9, 12), loaded.Piles[0].Executed);
         Assert.Null(loaded.Piles[1].Executed);
@@ -69,18 +69,18 @@ public sealed class ProjectStoreTests : IDisposable
     public void Keeps_hand_corrected_lengths()
     {
         var path = Path_("projekt.mpali");
-        ProjectStore.Save(path, SampleProject());
+        Repository.Save(path, SampleProject());
 
-        Assert.Equal(7.4, ProjectStore.Load(path)!.Piles[0].ActualLength);
+        Assert.Equal(7.4, Repository.Load(path)!.Piles[0].ActualLength);
     }
 
     [Fact]
     public void Keeps_polish_characters_intact()
     {
         var path = Path_("projekt.mpali");
-        ProjectStore.Save(path, SampleProject());
+        Repository.Save(path, SampleProject());
 
-        var loaded = ProjectStore.Load(path)!;
+        var loaded = Repository.Load(path)!;
 
         Assert.Contains("Łódź", loaded.Settings.Budowa);
         Assert.Contains("Kraków", loaded.Settings.Wykonawca);
@@ -88,7 +88,7 @@ public sealed class ProjectStoreTests : IDisposable
 
     [Fact]
     public void Returns_nothing_for_a_project_that_does_not_exist()
-        => Assert.Null(ProjectStore.Load(Path_("brak.mpali")));
+        => Assert.Null(Repository.Load(Path_("brak.mpali")));
 
     [Fact]
     public void Returns_nothing_for_a_damaged_project_instead_of_throwing()
@@ -96,27 +96,27 @@ public sealed class ProjectStoreTests : IDisposable
         var path = Path_("uszkodzony.mpali");
         File.WriteAllText(path, "{ to nie jest json");
 
-        Assert.Null(ProjectStore.Load(path));
+        Assert.Null(Repository.Load(path));
     }
 
     [Fact]
     public void Overwrites_a_previous_save()
     {
         var path = Path_("projekt.mpali");
-        ProjectStore.Save(path, SampleProject());
+        Repository.Save(path, SampleProject());
 
         var second = SampleProject();
         second.Piles[1].Executed = new DateTime(2022, 9, 13);
-        ProjectStore.Save(path, second);
+        Repository.Save(path, second);
 
-        Assert.Equal(new DateTime(2022, 9, 13), ProjectStore.Load(path)!.Piles[1].Executed);
+        Assert.Equal(new DateTime(2022, 9, 13), Repository.Load(path)!.Piles[1].Executed);
     }
 
     [Fact]
     public void Leaves_no_temporary_file_behind()
     {
         var path = Path_("projekt.mpali");
-        ProjectStore.Save(path, SampleProject());
+        Repository.Save(path, SampleProject());
 
         Assert.Empty(Directory.GetFiles(_dir, "*.tmp"));
     }
@@ -126,7 +126,7 @@ public sealed class ProjectStoreTests : IDisposable
     {
         var path = Path.Combine(_dir, "glebiej", "jeszcze", "projekt.mpali");
 
-        ProjectStore.Save(path, SampleProject());
+        Repository.Save(path, SampleProject());
 
         Assert.True(File.Exists(path));
     }
@@ -135,10 +135,10 @@ public sealed class ProjectStoreTests : IDisposable
     public void Backs_the_project_up_once_a_day()
     {
         var path = Path_("projekt.mpali");
-        ProjectStore.Save(path, SampleProject());
+        Repository.Save(path, SampleProject());
 
-        ProjectStore.BackupOnce(path);
-        ProjectStore.BackupOnce(path);      // same day again
+        Repository.BackupOnce(path);
+        Repository.BackupOnce(path);      // same day again
 
         Assert.Single(Directory.GetFiles(_dir, "*.bak"));
     }
@@ -146,7 +146,7 @@ public sealed class ProjectStoreTests : IDisposable
     [Fact]
     public void Backing_up_a_missing_project_does_nothing()
     {
-        ProjectStore.BackupOnce(Path_("brak.mpali"));
+        Repository.BackupOnce(Path_("brak.mpali"));
 
         Assert.Empty(Directory.GetFiles(_dir, "*.bak"));
     }
@@ -154,7 +154,7 @@ public sealed class ProjectStoreTests : IDisposable
     [Fact]
     public void Default_project_lives_under_the_users_app_data()
     {
-        Assert.EndsWith(".mpali", ProjectStore.DefaultPath);
-        Assert.Contains("MetrykiPali", ProjectStore.DefaultPath);
+        Assert.EndsWith(".mpali", Repository.DefaultPath);
+        Assert.Contains("MetrykiPali", Repository.DefaultPath);
     }
 }

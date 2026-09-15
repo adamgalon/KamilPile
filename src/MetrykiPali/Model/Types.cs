@@ -1,8 +1,8 @@
-namespace MetrykiPali;
+namespace MetrykiPali.Model;
 
 /// <summary>
 /// One row of the source table ("tabelka z palami"): a contiguous range of pile
-/// numbers that share the same diameter, design length and reinforcement.
+/// numbers sharing a diameter, design length and reinforcement.
 /// </summary>
 public sealed class PileRange
 {
@@ -40,6 +40,16 @@ public sealed class WorkDay
     public List<Pile> Piles { get; set; } = new();
 }
 
+/// <summary>One row of the journal grid, ready for display.</summary>
+public sealed class JournalEntry
+{
+    public DateTime Data { get; set; }
+    public string Pale { get; set; } = "";
+    public int Ilosc { get; set; }
+    public double Beton { get; set; }
+    public int Strony { get; set; }
+}
+
 /// <summary>Everything the generator needs besides the pile list itself.</summary>
 public sealed class MetrykaSettings
 {
@@ -56,7 +66,7 @@ public sealed class MetrykaSettings
     /// <summary>
     /// Overbreak coefficient: actual concrete / theoretical cylinder volume.
     /// 1.30 reproduces the volumes in the reference documentation for most pile
-    /// lengths (e.g. D=0.4 / L=9 m -> 1.47 m3, L=8 m -> 1.31 m3, L=10 m -> 1.63 m3).
+    /// lengths (D=0.4 / L=9 m -> 1.47 m3, L=8 m -> 1.31 m3, L=10 m -> 1.63 m3).
     /// </summary>
     public double ConcreteFactor { get; set; } = 1.30;
 
@@ -73,20 +83,10 @@ public sealed class ProjectState
     public string? SourcePath { get; set; }
     public MetrykaSettings Settings { get; set; } = new();
     public List<PileRange> Ranges { get; set; } = new();
+
     /// <summary>
-    /// The full pile list, including any lengths corrected by hand and the pour
-    /// date recorded in the journal (<see cref="Pile.Executed"/>).
+    /// The full pile list, including lengths corrected by hand and the pour date
+    /// recorded in the journal (<see cref="Pile.Executed"/>).
     /// </summary>
     public List<Pile> Piles { get; set; } = new();
-}
-
-public static class PileMath
-{
-    /// <summary>Theoretical shaft volume of a pile, m3.</summary>
-    public static double TheoreticalVolume(double diameter, double length)
-        => Math.PI * diameter * diameter / 4.0 * length;
-
-    /// <summary>Concrete placed, m3, rounded the way the metryka reports it.</summary>
-    public static double Concrete(double diameter, double length, double factor)
-        => Math.Round(TheoreticalVolume(diameter, length) * factor, 2, MidpointRounding.AwayFromZero);
 }

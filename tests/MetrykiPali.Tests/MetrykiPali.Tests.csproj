@@ -29,7 +29,10 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
-    <Using Include="MetrykiPali" />
+    <Using Include="MetrykiPali.Model" />
+    <Using Include="MetrykiPali.Services" />
+    <Using Include="MetrykiPali.Presentation" />
+    <Using Include="MetrykiPali.Tests.TestServices" Static="true" />
   </ItemGroup>
 
 </Project>

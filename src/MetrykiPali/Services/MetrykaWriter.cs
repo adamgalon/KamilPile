@@ -1,13 +1,15 @@
 using ClosedXML.Excel;
 
-namespace MetrykiPali;
+using MetrykiPali.Model;
+
+namespace MetrykiPali.Services;
 
 /// <summary>
 /// Writes the "METRYKA PALI" workbook. The layout mirrors the reference
 /// documentation: one page per 12 piles, laid out on a repeating 48-row block
 /// so that page breaks fall exactly where they do in the original.
 /// </summary>
-public static class MetrykaWriter
+public sealed class MetrykaWriter : IMetrykaWriter
 {
     private const int RowsPerBlock = 48;
     private const int FirstDataColumn = 2;   // B
@@ -32,7 +34,7 @@ public static class MetrykaWriter
     /// date and never share a page, so each metryka carries a single DATA value -
     /// the day those piles were actually poured.
     /// </summary>
-    public static void Write(string path, IReadOnlyList<WorkDay> days, MetrykaSettings settings)
+    public void Write(string path, IReadOnlyList<WorkDay> days, MetrykaSettings settings)
     {
         var pages = Paginate(days, settings.PilesPerPage);
         if (pages.Count == 0)

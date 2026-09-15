@@ -121,7 +121,7 @@ public class PaginationTests
         var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".xlsx");
 
         var error = Assert.Throws<InvalidOperationException>(
-            () => MetrykaWriter.Write(path, Array.Empty<WorkDay>(), new MetrykaSettings()));
+            () => Writer.Write(path, Array.Empty<WorkDay>(), new MetrykaSettings()));
 
         Assert.Contains("Dziennik", error.Message);
         Assert.False(File.Exists(path));

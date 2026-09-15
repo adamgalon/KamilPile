@@ -49,7 +49,7 @@ public sealed class MetrykaWriterTests : IDisposable
 
     private IXLWorksheet Generate(params WorkDay[] days)
     {
-        MetrykaWriter.Write(_path, days, new MetrykaSettings());
+        Writer.Write(_path, days, new MetrykaSettings());
         return new XLWorkbook(_path).Worksheet(1);
     }
 
@@ -180,7 +180,7 @@ public sealed class MetrykaWriterTests : IDisposable
     public void Repeats_the_site_and_company_in_the_page_header_and_footer()
     {
         var settings = new MetrykaSettings { Budowa = "Testowa budowa.", Firma = "FIRMA SP. Z O.O." };
-        MetrykaWriter.Write(_path, new[] { Day(D12, new[] { 1 }) }, settings);
+        Writer.Write(_path, new[] { Day(D12, new[] { 1 }) }, settings);
 
         using var wb = new XLWorkbook(_path);
         var ps = wb.Worksheet(1).PageSetup;
@@ -200,7 +200,7 @@ public sealed class MetrykaWriterTests : IDisposable
             Wykonawca = "Wykonawca sp. z o.o.",
             Metoda = "CFA"
         };
-        MetrykaWriter.Write(_path, new[] { Day(D12, new[] { 1 }) }, settings);
+        Writer.Write(_path, new[] { Day(D12, new[] { 1 }) }, settings);
 
         using var wb = new XLWorkbook(_path);
         var ws = wb.Worksheet(1);
@@ -256,7 +256,7 @@ public sealed class MetrykaWriterTests : IDisposable
             .Select(i => Day(D12.AddDays(i), Enumerable.Range(i * 24 + 1, 24)))
             .ToArray();
 
-        MetrykaWriter.Write(_path, days, new MetrykaSettings());
+        Writer.Write(_path, days, new MetrykaSettings());
 
         using var wb = new XLWorkbook(_path);
         var ws = wb.Worksheet(1);

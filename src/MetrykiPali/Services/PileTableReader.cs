@@ -4,15 +4,17 @@ using ClosedXML.Excel;
 using UglyToad.PdfPig;
 using UglyToad.PdfPig.Content;
 
-namespace MetrykiPali;
+using MetrykiPali.Model;
+
+namespace MetrykiPali.Services;
 
 /// <summary>
 /// Reads the source table ("tabelka z palami") from .xlsx / .xls / .csv / .pdf.
 /// Expected columns: od | do | średnica | długość | zbrojenie.
 /// </summary>
-public static class PileTableReader
+public sealed class PileTableReader : IScheduleReader
 {
-    public static IReadOnlyList<PileRange> Read(string path)
+    public IReadOnlyList<PileRange> Read(string path)
     {
         var ext = Path.GetExtension(path).ToLowerInvariant();
         var ranges = ext switch
@@ -166,30 +168,5 @@ public static class PileTableReader
 
         var cleaned = text.Trim().Replace(" ", "").Replace('\u00A0', ' ').Trim().Replace(',', '.');
         return double.TryParse(cleaned, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
-    }
-
-    // ------------------------------------------------------------- expansion
-
-    /// <summary>Expands ranges into the individual piles that become metryka columns.</summary>
-    public static List<Pile> Expand(IEnumerable<PileRange> ranges, MetrykaSettings settings)
-    {
-        var piles = new List<Pile>();
-        foreach (var r in ranges)
-        {
-            for (var no = r.From; no <= r.To; no++)
-            {
-                piles.Add(new Pile
-                {
-                    Number = no,
-                    Diameter = r.Diameter,
-                    DesignLength = r.Length,
-                    ActualLength = r.Length,
-                    Concrete = PileMath.Concrete(r.Diameter, r.Length, settings.ConcreteFactor),
-                    ConcretePlant = settings.Betoniarnia,
-                    Reinforcement = r.Reinforcement
-                });
-            }
-        }
-        return piles;
     }
 }

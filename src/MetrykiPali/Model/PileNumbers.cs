@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Text;
 
-namespace MetrykiPali;
+namespace MetrykiPali.Model;
 
 /// <summary>
 /// Parses and formats pile number lists the way they are written on site,

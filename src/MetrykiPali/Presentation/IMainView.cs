@@ -1,0 +1,69 @@
+using MetrykiPali.Model;
+
+namespace MetrykiPali.Presentation;
+
+/// <summary>Which pile the user edited in the grid, and what changed.</summary>
+public sealed record PileEdited(int RowIndex, string PropertyName);
+
+/// <summary>
+/// The main window, as the presenter sees it.
+///
+/// This is a passive view: it owns no logic, only the controls' contents and
+/// the user's intentions. Everything that decides anything lives in
+/// <see cref="MainPresenter"/>, which is why the app can be tested without
+/// opening a window.
+/// </summary>
+public interface IMainView
+{
+    // --- what the window is showing ------------------------------------
+    string SourcePath { get; set; }
+    string Budowa { get; set; }
+    string Wykonawca { get; set; }
+    string Metoda { get; set; }
+    string Betoniarnia { get; set; }
+    double ConcreteFactor { get; set; }
+    int PilesPerPage { get; set; }
+    DateTime JournalDate { get; set; }
+    string JournalPiles { get; set; }
+    string StatusText { get; set; }
+    bool CanGenerate { get; set; }
+    bool CanOpenOutput { get; set; }
+    bool Busy { get; set; }
+
+    // --- what the user has picked --------------------------------------
+    DateTime? SelectedJournalDay { get; }
+    IReadOnlyList<int> SelectedPileNumbers { get; }
+
+    // --- filling the grids ---------------------------------------------
+    void ShowRanges(IReadOnlyList<PileRange> ranges);
+    void ShowPiles(IReadOnlyList<Pile> piles);
+    void ShowJournal(IReadOnlyList<JournalEntry> entries);
+    void RefreshPiles();
+
+    // --- talking to the user -------------------------------------------
+    string? AskForSchedule();
+    string? AskWhereToSaveMetryki(string suggestedName);
+    string? AskForProject();
+    string? AskWhereToSaveProject();
+    void ShowError(string title, string message);
+    void ShowInfo(string title, string message);
+    bool Confirm(string title, string question);
+    void OpenExternally(string path);
+
+    // --- what the user asked for ---------------------------------------
+    event EventHandler LoadScheduleRequested;
+    event EventHandler AddDayRequested;
+    event EventHandler AddSelectedPilesRequested;
+    event EventHandler RemoveDayRequested;
+    event EventHandler GenerateRequested;
+    event EventHandler OpenOutputRequested;
+    event EventHandler SettingsChanged;
+    event EventHandler ConcreteFactorChanged;
+    event EventHandler PilesPerPageChanged;
+    event EventHandler ConcretePlantChanged;
+    event EventHandler<PileEdited> PileEdited;
+    event EventHandler NewProjectRequested;
+    event EventHandler OpenProjectRequested;
+    event EventHandler SaveProjectAsRequested;
+    event EventHandler Closing;
+}

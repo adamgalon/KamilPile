@@ -1,0 +1,408 @@
+using MetrykiPali.Model;
+using MetrykiPali.Services;
+
+namespace MetrykiPali.Presentation;
+
+/// <summary>
+/// All of the application's behaviour.
+///
+/// The presenter reacts to what the user asked the view for, works on the
+/// domain (<see cref="Journal"/>, <see cref="PileSchedule"/>) and pushes the
+/// result back into the view. It talks to files only through the service
+/// interfaces, so the tests drive the whole app with a fake view and a
+/// fake repository - no window, no disk.
+/// </summary>
+public sealed class MainPresenter
+{
+    private readonly IMainView _view;
+    private readonly IScheduleReader _reader;
+    private readonly IMetrykaWriter _writer;
+    private readonly IProjectRepository _repository;
+
+    private ProjectState _project = new();
+    private Journal _journal = new(new List<Pile>());
+    private string _projectPath;
+    private string? _lastOutput;
+    private bool _loading;
+
+    public MainPresenter(
+        IMainView view,
+        IScheduleReader reader,
+        IMetrykaWriter writer,
+        IProjectRepository repository)
+    {
+        _view = view;
+        _reader = reader;
+        _writer = writer;
+        _repository = repository;
+        _projectPath = repository.DefaultPath;
+
+        _view.LoadScheduleRequested += (_, _) => LoadSchedule();
+        _view.AddDayRequested += (_, _) => AddTypedPilesToJournal();
+        _view.AddSelectedPilesRequested += (_, _) => AddSelectedPilesToJournal();
+        _view.RemoveDayRequested += (_, _) => RemoveSelectedDay();
+        _view.GenerateRequested += (_, _) => Generate();
+        _view.OpenOutputRequested += (_, _) => OpenLastOutput();
+        _view.SettingsChanged += (_, _) => SaveQuietly();
+        _view.ConcreteFactorChanged += (_, _) => ConcreteFactorChanged();
+        _view.PilesPerPageChanged += (_, _) => RefreshJournal();
+        _view.ConcretePlantChanged += (_, _) => ConcretePlantChanged();
+        _view.PileEdited += (_, edit) => PileEdited(edit);
+        _view.NewProjectRequested += (_, _) => NewProject();
+        _view.OpenProjectRequested += (_, _) => OpenProject();
+        _view.SaveProjectAsRequested += (_, _) => SaveProjectAs();
+        _view.Closing += (_, _) => SaveQuietly();
+    }
+
+    /// <summary>Where the project is currently being saved.</summary>
+    public string ProjectPath => _projectPath;
+
+    /// <summary>The file written by the last successful generation, if any.</summary>
+    public string? LastOutput => _lastOutput;
+
+    // ------------------------------------------------------------- start-up
+
+    /// <summary>Reopens the project from the last session, if there is one.</summary>
+    public void Start()
+    {
+        _repository.BackupOnce(_projectPath);
+        var restored = _repository.Load(_projectPath);
+        Adopt(restored ?? new ProjectState(), _projectPath);
+    }
+
+    private void Adopt(ProjectState project, string path)
+    {
+        _project = project;
+        _projectPath = path;
+        _journal = new Journal(_project.Piles);
+
+        _loading = true;
+        try
+        {
+            var s = _project.Settings;
+            _view.SourcePath = _project.SourcePath ?? "";
+            _view.Budowa = s.Budowa;
+            _view.Wykonawca = s.Wykonawca;
+            _view.Metoda = s.Metoda;
+            _view.Betoniarnia = s.Betoniarnia;
+            _view.ConcreteFactor = s.ConcreteFactor;
+            _view.PilesPerPage = s.PilesPerPage;
+            _view.JournalDate = s.Data == default ? DateTime.Today : s.Data;
+
+            _view.ShowRanges(_project.Ranges);
+            _view.ShowPiles(_project.Piles);
+        }
+        finally
+        {
+            _loading = false;
+        }
+
+        RefreshJournal();
+    }
+
+    // -------------------------------------------------------------- loading
+
+    private void LoadSchedule()
+    {
+        var path = _view.AskForSchedule();
+        if (path is null) return;
+
+        try
+        {
+            CaptureSettings();
+
+            var ranges = _reader.Read(path).ToList();
+            var fresh = PileSchedule.Expand(ranges, _project.Settings);
+            var kept = PileSchedule.CarryOverDates(_project.Piles, fresh);
+
+            _project.SourcePath = path;
+            _project.Ranges = ranges;
+            _project.Piles = fresh;
+
+            Adopt(_project, _projectPath);
+            Save();
+
+            _view.StatusText = kept > 0
+                ? $"Wczytano {ranges.Count} zakresów. Zachowano daty dla {kept} pali."
+                : $"Wczytano {ranges.Count} zakresów ({fresh.Count} pali).";
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException or UnauthorizedAccessException)
+        {
+            _view.ShowError("Nie udało się wczytać pliku", ex.Message);
+        }
+    }
+
+    // -------------------------------------------------------------- journal
+
+    private void AddTypedPilesToJournal()
+    {
+        List<int> numbers;
+        try
+        {
+            numbers = PileNumbers.Parse(_view.JournalPiles);
+        }
+        catch (FormatException ex)
+        {
+            _view.ShowError("Błędny zapis numerów pali", ex.Message);
+            return;
+        }
+
+        if (AddToJournal(numbers)) _view.JournalPiles = "";
+    }
+
+    private void AddSelectedPilesToJournal()
+    {
+        var selected = _view.SelectedPileNumbers;
+        if (selected.Count == 0)
+        {
+            _view.ShowInfo("Brak zaznaczenia", "Zaznacz najpierw pale na zakładce \"Pale\".");
+            return;
+        }
+
+        AddToJournal(selected);
+    }
+
+    private bool AddToJournal(IReadOnlyCollection<int> numbers)
+    {
+        if (_journal.Total == 0)
+        {
+            _view.ShowInfo("Brak danych", "Najpierw wczytaj tabelkę z palami.");
+            return false;
+        }
+
+        if (numbers.Count == 0)
+        {
+            _view.ShowInfo("Brak numerów", "Podaj numery pali, np. \"1-10, 25, 30-33\".");
+            return false;
+        }
+
+        var plan = _journal.Plan(numbers, _view.JournalDate);
+
+        if (plan.Unknown.Count > 0 && !_view.Confirm("Nieznane numery pali",
+                $"Tych pali nie ma w tabelce i zostaną pominięte:\n{PileNumbers.Format(plan.Unknown)}\n\nKontynuować?"))
+            return false;
+
+        if (plan.Moved.Count > 0 && !_view.Confirm("Pale już w dzienniku",
+                $"Te pale mają już inną datę wykonania:\n{PileNumbers.Format(plan.Moved)}\n\n" +
+                $"Przenieść je na {plan.Date:dd.MM.yyyy}?"))
+            return false;
+
+        if (!plan.HasAnythingToDo)
+        {
+            _view.ShowInfo("Brak danych", "Żaden z podanych numerów nie występuje w tabelce.");
+            return false;
+        }
+
+        var added = _journal.Apply(plan);
+
+        RefreshJournal();
+        Save();
+
+        _view.StatusText = $"Dodano {added} pali do dnia {plan.Date:dd.MM.yyyy}." +
+                           (plan.Moved.Count > 0 ? $" Przeniesiono {plan.Moved.Count}." : "") +
+                           $"   |   {Summary()}";
+        return true;
+    }
+
+    private void RemoveSelectedDay()
+    {
+        var day = _view.SelectedJournalDay;
+        if (day is null)
+        {
+            _view.ShowInfo("Brak zaznaczenia", "Zaznacz dzień na liście \"Dziennik (dni)\".");
+            return;
+        }
+
+        var count = _journal.Days().FirstOrDefault(d => d.Date == day.Value.Date)?.Piles.Count ?? 0;
+        if (!_view.Confirm("Usuń dzień",
+                $"Usunąć dzień {day:dd.MM.yyyy} ({count} pali)?\n\nPale wrócą na listę nieprzypisanych."))
+            return;
+
+        _journal.RemoveDay(day.Value);
+        RefreshJournal();
+        Save();
+    }
+
+    private void RefreshJournal()
+    {
+        _view.ShowJournal(_journal.Entries(_view.PilesPerPage));
+        _view.RefreshPiles();
+        _view.CanGenerate = _journal.Assigned > 0;
+        UpdateStatus();
+    }
+
+    // ------------------------------------------------------------ recompute
+
+    private void ConcreteFactorChanged()
+    {
+        if (_loading) return;
+
+        _journal.RecalculateConcrete(_view.ConcreteFactor);
+        RefreshJournal();
+        SaveQuietly();
+    }
+
+    private void ConcretePlantChanged()
+    {
+        if (_loading) return;
+
+        _journal.SetConcretePlant(_view.Betoniarnia);
+        _view.RefreshPiles();
+        SaveQuietly();
+    }
+
+    private void PileEdited(PileEdited edit)
+    {
+        if (_loading) return;
+        if (edit.RowIndex < 0 || edit.RowIndex >= _project.Piles.Count) return;
+        if (edit.PropertyName is not (nameof(Pile.ActualLength) or nameof(Pile.Diameter))) return;
+
+        _journal.RecalculateConcrete(_project.Piles[edit.RowIndex], _view.ConcreteFactor);
+        RefreshJournal();
+        SaveQuietly();
+    }
+
+    // ------------------------------------------------------------ generate
+
+    private void Generate()
+    {
+        CaptureSettings();
+
+        var days = _journal.Days();
+        if (days.Count == 0)
+        {
+            _view.ShowInfo("Brak danych",
+                "Dziennik jest pusty — najpierw dodaj pale wykonane w poszczególnych dniach.");
+            return;
+        }
+
+        if (_journal.Outstanding > 0 && !_view.Confirm("Pale bez daty",
+                $"{_journal.Outstanding} pali nie ma jeszcze przypisanej daty i nie znajdzie się w metrykach.\n\n" +
+                "Wygenerować metryki tylko dla pali z dziennika?"))
+            return;
+
+        var path = _view.AskWhereToSaveMetryki($"Metryki pali {DateTime.Today:yyyy-MM-dd}.xlsx");
+        if (path is null) return;
+
+        try
+        {
+            _view.Busy = true;
+            _writer.Write(path, days, _project.Settings);
+
+            _lastOutput = path;
+            _view.CanOpenOutput = true;
+
+            var pages = MetrykaWriter.Paginate(days, _project.Settings.PilesPerPage).Count;
+            var piles = days.Sum(d => d.Piles.Count);
+
+            if (_view.Confirm("Gotowe",
+                    $"Zapisano {pages} stron metryk ({piles} pali, {days.Count} dni) do:\n{path}\n\nOtworzyć plik teraz?"))
+                OpenLastOutput();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            _view.ShowError("Nie udało się zapisać pliku", ex.Message);
+        }
+        finally
+        {
+            _view.Busy = false;
+            UpdateStatus();
+        }
+    }
+
+    private void OpenLastOutput()
+    {
+        if (_lastOutput is not null) _view.OpenExternally(_lastOutput);
+    }
+
+    // -------------------------------------------------------------- project
+
+    private void NewProject()
+    {
+        if (!_view.Confirm("Nowy projekt",
+                "Rozpocząć nowy projekt? Bieżący dziennik zostanie wyczyszczony " +
+                "(zapisany plik pozostanie na dysku)."))
+            return;
+
+        _lastOutput = null;
+        _view.CanOpenOutput = false;
+
+        // Start the empty project back in the default slot. Keeping the current
+        // path would overwrite the file the user had just saved this site to -
+        // the opposite of what the question above promises.
+        Adopt(new ProjectState(), _repository.DefaultPath);
+        Save();
+    }
+
+    private void OpenProject()
+    {
+        var path = _view.AskForProject();
+        if (path is null) return;
+
+        var loaded = _repository.Load(path);
+        if (loaded is null)
+        {
+            _view.ShowError("Błąd", "Nie udało się odczytać tego pliku projektu.");
+            return;
+        }
+
+        Adopt(loaded, path);
+    }
+
+    private void SaveProjectAs()
+    {
+        var path = _view.AskWhereToSaveProject();
+        if (path is null) return;
+
+        _projectPath = path;
+        Save();
+        _view.StatusText = "Zapisano projekt: " + path;
+    }
+
+    // --------------------------------------------------------------- saving
+
+    private void CaptureSettings()
+    {
+        var s = _project.Settings;
+        s.Budowa = _view.Budowa.Trim();
+        s.Wykonawca = _view.Wykonawca.Trim();
+        s.Metoda = _view.Metoda.Trim();
+        s.Betoniarnia = _view.Betoniarnia.Trim();
+        s.ConcreteFactor = _view.ConcreteFactor;
+        s.PilesPerPage = _view.PilesPerPage;
+        s.Data = _view.JournalDate.Date;
+    }
+
+    private void Save()
+    {
+        CaptureSettings();
+        _repository.Save(_projectPath, _project);
+    }
+
+    /// <summary>Saves without letting a storage problem interrupt the user.</summary>
+    private void SaveQuietly()
+    {
+        if (_loading) return;
+
+        try
+        {
+            Save();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _view.StatusText = "Nie udało się zapisać projektu: " + ex.Message;
+        }
+    }
+
+    // --------------------------------------------------------------- status
+
+    private string Summary() =>
+        $"Pale: {_journal.Total}   |   W dzienniku: {_journal.Assigned}   |   " +
+        $"Bez daty: {_journal.Outstanding}   |   Dni: {_journal.Days().Count}   |   " +
+        $"Strony: {_journal.Entries(_view.PilesPerPage).Sum(e => e.Strony)}";
+
+    private void UpdateStatus()
+        => _view.StatusText = _journal.Total == 0
+            ? "Wczytaj tabelkę z palami, aby rozpocząć."
+            : Summary() + (_lastOutput is null ? "" : $"   |   Zapisano: {Path.GetFileName(_lastOutput)}");
+}
