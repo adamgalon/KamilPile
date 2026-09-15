@@ -17,8 +17,30 @@ public sealed class JsonProjectRepository : IProjectRepository
     {
         WriteIndented = true,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        Converters = { new CalendarDateConverter() }
     };
+
+    /// <summary>
+    /// Writes dates as a plain calendar date with no timezone offset.
+    ///
+    /// A pour date means "the twelfth of September" - it is not an instant. Left
+    /// to itself the serializer writes a DateTime whose Kind is Local with an
+    /// offset ("2022-09-12T00:00:00+02:00"), and reading that back on a machine
+    /// in a different timezone shifts it to the eleventh. The date is the whole
+    /// point of a metryka, so it is stored plainly and read back as
+    /// <see cref="DateTimeKind.Unspecified"/>.
+    /// </summary>
+    private sealed class CalendarDateConverter : JsonConverter<DateTime>
+    {
+        private const string Format = "yyyy-MM-ddTHH:mm:ss";
+
+        public override DateTime Read(ref Utf8JsonReader reader, Type type, JsonSerializerOptions options)
+            => DateTime.SpecifyKind(reader.GetDateTime(), DateTimeKind.Unspecified);
+
+        public override void Write(Utf8JsonWriter writer, DateTime value, JsonSerializerOptions options)
+            => writer.WriteStringValue(value.ToString(Format, System.Globalization.CultureInfo.InvariantCulture));
+    }
 
     /// <summary>The project reopened automatically on every start.</summary>
     public string DefaultPath { get; } = Path.Combine(

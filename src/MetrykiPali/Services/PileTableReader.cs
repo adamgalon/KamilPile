@@ -37,31 +37,72 @@ public sealed class PileTableReader : IScheduleReader
 
     private static List<PileRange> ReadExcel(string path)
     {
+        // ClosedXML reads the Open XML formats only. A real .xls is a completely
+        // different (BIFF) file and makes it throw ArgumentException, so say so
+        // plainly instead of letting that escape.
+        if (Path.GetExtension(path).Equals(".xls", StringComparison.OrdinalIgnoreCase))
+            throw new NotSupportedException(
+                "Pliki .xls (Excel 97-2003) nie są obsługiwane. Otwórz plik w Excelu " +
+                "i zapisz go jako .xlsx, albo wyeksportuj do .csv.");
+
         // Copy first: the source file is often open in Excel / synced by OneDrive,
         // both of which hold a lock that would make a direct open fail.
         var temp = Path.Combine(Path.GetTempPath(), $"metryki_{Guid.NewGuid():N}{Path.GetExtension(path)}");
         File.Copy(path, temp, overwrite: true);
         try
         {
-            using var wb = new XLWorkbook(temp);
-            var ws = wb.Worksheets.First();
-            var result = new List<PileRange>();
+            using var wb = OpenWorkbook(temp);
 
-            foreach (var row in ws.RangeUsed()?.RowsUsed() ?? Enumerable.Empty<IXLRangeRow>())
+            // Take the first sheet that actually holds a schedule. Real project
+            // files often lead with a cover sheet, and the table sits behind it.
+            foreach (var ws in wb.Worksheets)
             {
-                var cells = Enumerable.Range(1, 5).Select(i => row.Cell(i)).ToArray();
-                var range = TryBuildRange(
-                    CellText(cells[0]), CellText(cells[1]),
-                    CellText(cells[2]), CellText(cells[3]), CellText(cells[4]));
-                if (range is not null) result.Add(range);
+                var result = ReadWorksheet(ws);
+                if (result.Count > 0) return result;
             }
 
-            return result;
+            return new List<PileRange>();
         }
         finally
         {
             try { File.Delete(temp); } catch { /* best effort */ }
         }
+    }
+
+    /// <summary>
+    /// Opens the workbook, turning "this is not a workbook" into a failure the
+    /// caller can show the user. Left to itself ClosedXML throws
+    /// FileFormatException or ArgumentException, neither of which the
+    /// application handles - they would take the window down.
+    /// </summary>
+    private static XLWorkbook OpenWorkbook(string path)
+    {
+        try
+        {
+            return new XLWorkbook(path);
+        }
+        catch (Exception ex) when (ex is not (IOException or UnauthorizedAccessException))
+        {
+            throw new InvalidDataException(
+                "Nie udało się otworzyć tego pliku jako skoroszytu Excela. " +
+                "Plik może być uszkodzony lub zapisany w innym formacie.", ex);
+        }
+    }
+
+    private static List<PileRange> ReadWorksheet(IXLWorksheet worksheet)
+    {
+        var result = new List<PileRange>();
+
+        foreach (var row in worksheet.RangeUsed()?.RowsUsed() ?? Enumerable.Empty<IXLRangeRow>())
+        {
+            var cells = Enumerable.Range(1, 5).Select(i => row.Cell(i)).ToArray();
+            var range = TryBuildRange(
+                CellText(cells[0]), CellText(cells[1]),
+                CellText(cells[2]), CellText(cells[3]), CellText(cells[4]));
+            if (range is not null) result.Add(range);
+        }
+
+        return result;
     }
 
     private static string CellText(IXLCell cell)
@@ -124,15 +165,47 @@ public sealed class PileTableReader : IScheduleReader
         return result;
     }
 
+    /// <summary>
+    /// Groups words into visual rows by clustering their baselines.
+    ///
+    /// Rounding each baseline into a fixed bucket instead would split a row
+    /// whenever its words straddle a bucket edge - baselines of 99.9 and 102.4
+    /// are plainly the same row, but land in buckets 25 and 26. Clustering
+    /// compares each word to the row being built, so only a real gap starts a
+    /// new one.
+    /// </summary>
     private static IEnumerable<List<Word>> GroupIntoLines(IEnumerable<Word> words)
     {
         const double tolerance = 4.0; // points; rows in these tables are ~11 pt apart
 
-        return words
+        var ordered = words
             .Where(w => !string.IsNullOrWhiteSpace(w.Text))
-            .GroupBy(w => Math.Round(w.BoundingBox.Bottom / tolerance))
-            .OrderByDescending(g => g.Key)
-            .Select(g => g.OrderBy(w => w.BoundingBox.Left).ToList());
+            .OrderByDescending(w => w.BoundingBox.Bottom)
+            .ToList();
+
+        var lines = new List<List<Word>>();
+        var current = new List<Word>();
+        var baseline = 0.0;
+
+        foreach (var word in ordered)
+        {
+            if (current.Count == 0)
+            {
+                baseline = word.BoundingBox.Bottom;
+            }
+            else if (Math.Abs(word.BoundingBox.Bottom - baseline) > tolerance)
+            {
+                lines.Add(current);
+                current = new List<Word>();
+                baseline = word.BoundingBox.Bottom;
+            }
+
+            current.Add(word);
+        }
+
+        if (current.Count > 0) lines.Add(current);
+
+        return lines.Select(line => line.OrderBy(w => w.BoundingBox.Left).ToList());
     }
 
     // --------------------------------------------------------------- parsing
